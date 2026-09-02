@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>passcheck. : Password Strength and Breach Checker</title>
+<meta name="description" content="Check password strength and known breaches, entirely in your browser. Your password is never sent anywhere in full.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0B1220;
+    --panel: #131B2C;
+    --panel-2: #0F1729;
+    --border: #26334A;
+    --text: #E7EDF5;
+    --text-muted: #7C8CA6;
+    --good: #5EEAD4;
+    --good-dim: #1F4A45;
+    --warn: #F5A97F;
+    --warn-dim: #4A3423;
+    --bad: #F87171;
+    --bad-dim: #4A1F1F;
+    --radius: 6px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .mono { font-family: 'IBM Plex Mono', monospace; }
+
+  header {
+    padding: 28px clamp(20px, 4vw, 48px) 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  header .wordmark {
+    font-size: 22px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+  header .wordmark span { color: var(--text-muted); font-weight: 400; }
+
+  header .tagline {
+    color: var(--text-muted);
+    font-size: 14px;
+    max-width: 44ch;
+  }
+
+  main {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: clamp(20px, 4vw, 48px);
+    display: grid;
+    grid-template-columns: 320px 1fr;
+    gap: 24px;
+  }
+
+  @media (max-width: 860px) {
+    main { grid-template-columns: 1fr; }
+  }
+
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px;
+  }
+
+  .field { margin-bottom: 22px; }
+  .field:last-child { margin-bottom: 0; }
+
+  label {
+    display: block;
+    font-size: 13px;
+    color: var(--text-muted);
+    margin-bottom: 8px;
+  }
+
+  .pw-row {
+    position: relative;
+  }
+
+  input[type="text"], input[type="password"] {
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 16px;
+    padding: 10px 44px 10px 12px;
+    border-radius: var(--radius);
+    outline: none;
+  }
+  input:focus { border-color: var(--good); }
+
+  .toggle-visibility {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 12px;
+    font-family: 'IBM Plex Sans', sans-serif;
+  }
+  .toggle-visibility:hover { color: var(--good); }
+
+  .hint {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 8px;
+  }
+
+  .breach-btn {
+    margin-top: 16px;
+    width: 100%;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: 'IBM Plex Sans', sans-serif;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 10px 14px;
+    border-radius: var(--radius);
+    cursor: pointer;
+  }
+  .breach-btn:hover:not(:disabled) { border-color: var(--good); color: var(--good); }
+  .breach-btn:disabled { opacity: 0.5; cursor: default; }
+
+  .privacy-note {
+    margin-top: 22px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border);
+    font-size: 12.5px;
+    color: var(--text-muted);
+    line-height: 1.6;
+  }
+  .privacy-note strong { color: var(--text); font-weight: 500; }
+
+  .visual-panel { display: flex; flex-direction: column; gap: 24px; }
+
+  .strength-bar {
+    height: 12px;
+    border-radius: 999px;
+    overflow: hidden;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+  }
+  .strength-fill {
+    height: 100%;
+    width: 100%;
+    transform: scaleX(0);
+    transform-origin: left;
+    background: var(--bad);
+    transition: transform 0.2s, background-color 0.2s;
+  }
+  .strength-label {
+    margin-top: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .strength-meta {
+    margin-top: 4px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+  }
+
+  .checklist {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 10px;
+    margin-top: 18px;
+  }
+  .check-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--text-muted);
+  }
+  .check-item .dot {
+    width: 8px; height: 8px;
+    border-radius: 2px;
+    background: var(--border);
+    flex-shrink: 0;
+  }
+  .check-item.pass { color: var(--text); }
+  .check-item.pass .dot { background: var(--good); }
+  .check-item.fail .dot { background: var(--bad); }
+
+  .binary-block h3, .results-panel h3, .breach-panel h3 {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+    margin: 0 0 14px;
+  }
+
+  .explain {
+    font-size: 13.5px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    max-width: 72ch;
+  }
+  .explain strong { color: var(--text); font-weight: 500; }
+
+  .breach-result {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 15px;
+    padding: 14px 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--panel-2);
+  }
+  .breach-result.safe { border-color: var(--good); color: var(--good); }
+  .breach-result.unsafe { border-color: var(--bad); color: var(--bad); }
+  .breach-result.pending { color: var(--text-muted); }
+
+  footer {
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 12px;
+    padding: 32px 20px 40px;
+  }
+  footer a { color: var(--text-muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wordmark">passcheck<span>.</span></div>
+  <div class="tagline">Password strength and breach checker. Nothing you type is ever sent anywhere in full.</div>
+</header>
+
+<main>
+  <div class="panel">
+    <div class="field">
+      <label for="pwInput">Password</label>
+      <div class="pw-row">
+        <input type="password" id="pwInput" class="mono" spellcheck="false" autocomplete="off" placeholder="Type a password to check">
+        <button type="button" class="toggle-visibility" id="toggleVisibility">show</button>
+      </div>
+      <div class="hint">Checked entirely on this page. Nothing is sent anywhere until you click "Check breaches" below.</div>
+    </div>
+
+    <button type="button" class="breach-btn" id="breachBtn" disabled>Check breaches (safe, k-anonymity)</button>
+
+    <div class="privacy-note">
+      <strong>How this stays private:</strong> the breach check hashes your password locally with SHA-1, then sends only the first 5 characters of that hash to the Have I Been Pwned API. The API returns every breached hash that starts with those 5 characters, often thousands of them, and the match is confirmed locally in your browser. Your password, and even your full hash, never leaves this page.
+    </div>
+  </div>
+
+  <div class="visual-panel">
+    <div class="panel">
+      <h3>Strength</h3>
+      <div class="strength-bar"><div class="strength-fill" id="strengthFill"></div></div>
+      <div class="strength-label" id="strengthLabel">Enter a password above</div>
+      <div class="strength-meta" id="strengthMeta"></div>
+      <div class="checklist" id="checklist"></div>
+    </div>
+
+    <div class="panel breach-panel">
+      <h3>Breach check</h3>
+      <div class="breach-result pending" id="breachResult">Not checked yet</div>
+    </div>
+
+    <div class="panel">
+      <h3>Why</h3>
+      <div class="explain" id="explainText">Start typing a password to see a plain English breakdown of its strength.</div>
+    </div>
+  </div>
+</main>
+
+<footer>
+  Built by Tim, a small tool for a specific job.
+</footer>
+
+<script>
+(function () {
+  const pwInput = document.getElementById('pwInput');
+  const toggleVisibility = document.getElementById('toggleVisibility');
+  const breachBtn = document.getElementById('breachBtn');
+  const strengthFill = document.getElementById('strengthFill');
+  const strengthLabel = document.getElementById('strengthLabel');
+  const strengthMeta = document.getElementById('strengthMeta');
+  const checklist = document.getElementById('checklist');
+  const breachResult = document.getElementById('breachResult');
+  const explainText = document.getElementById('explainText');
+
+  const COMMON_PASSWORDS = new Set([
+    '123456', '123456789', 'qwerty', 'password', '12345', '12345678',
+    '111111', '1234567', 'sunshine', 'iloveyou', 'admin', 'welcome',
+    'monkey', 'login', 'abc123', 'starwars', '123123', 'dragon',
+    'passw0rd', 'master', 'hello', 'freedom', 'whatever', 'trustno1',
+    'letmein', 'football', 'baseball', 'qazwsx', 'superman', 'access',
+  ]);
+
+  function hasSequentialRun(str) {
+    const lower = str.toLowerCase();
+    for (let i = 0; i < lower.length - 3; i++) {
+      const a = lower.charCodeAt(i);
+      const b = lower.charCodeAt(i + 1);
+      const c = lower.charCodeAt(i + 2);
+      const d = lower.charCodeAt(i + 3);
+      if (b - a === 1 && c - b === 1 && d - c === 1) return true;
+      if (a - b === 1 && b - c === 1 && c - d === 1) return true;
+    }
+    return false;
+  }
+
+  function hasRepeatedRun(str) {
+    return /(.)\1{3,}/.test(str);
+  }
+
+  function charsetSize(pw) {
+    let size = 0;
+    if (/[a-z]/.test(pw)) size += 26;
+    if (/[A-Z]/.test(pw)) size += 26;
+    if (/[0-9]/.test(pw)) size += 10;
+    if (/[^a-zA-Z0-9]/.test(pw)) size += 32;
+    return size || 1;
+  }
+
+  function analyze(pw) {
+    const checks = {
+      length12: pw.length >= 12,
+      lower: /[a-z]/.test(pw),
+      upper: /[A-Z]/.test(pw),
+      digit: /[0-9]/.test(pw),
+      symbol: /[^a-zA-Z0-9]/.test(pw),
+      notCommon: !COMMON_PASSWORDS.has(pw.toLowerCase()),
+      noObviousPattern: !hasSequentialRun(pw) && !hasRepeatedRun(pw),
+    };
+
+    let bits = pw.length * Math.log2(charsetSize(pw));
+
+    const penalties = [];
+    if (!checks.notCommon) {
+      bits = Math.min(bits, 8);
+      penalties.push('it is one of the most common passwords in the world');
+    }
+    if (!checks.noObviousPattern) {
+      bits -= 20;
+      penalties.push('it contains an obvious pattern, like a run of consecutive or repeated characters');
+    }
+    bits = Math.max(bits, 0);
+
+    let label, colorVar;
+    if (pw.length === 0) {
+      label = 'Enter a password above';
+      colorVar = null;
+    } else if (bits < 28) {
+      label = 'Very weak';
+      colorVar = 'var(--bad)';
+    } else if (bits < 36) {
+      label = 'Weak';
+      colorVar = 'var(--bad)';
+    } else if (bits < 60) {
+      label = 'Fair';
+      colorVar = 'var(--warn)';
+    } else if (bits < 100) {
+      label = 'Strong';
+      colorVar = 'var(--good)';
+    } else {
+      label = 'Very strong';
+      colorVar = 'var(--good)';
+    }
+
+    return { checks, bits, label, colorVar, penalties };
+  }
+
+  function renderChecklist(checks) {
+    const items = [
+      ['length12', 'At least 12 characters'],
+      ['lower', 'Lowercase letters'],
+      ['upper', 'Uppercase letters'],
+      ['digit', 'Numbers'],
+      ['symbol', 'Symbols'],
+      ['notCommon', 'Not a common password'],
+      ['noObviousPattern', 'No obvious pattern'],
+    ];
+    checklist.innerHTML = '';
+    items.forEach(([key, text]) => {
+      const div = document.createElement('div');
+      div.className = 'check-item ' + (checks[key] ? 'pass' : 'fail');
+      div.innerHTML = '<span class="dot"></span>' + text;
+      checklist.appendChild(div);
+    });
+  }
+
+  function renderStrength(pw) {
+    const result = analyze(pw);
+    renderChecklist(result.checks);
+
+    if (pw.length === 0) {
+      strengthFill.style.transform = 'scaleX(0)';
+      strengthLabel.textContent = result.label;
+      strengthMeta.textContent = '';
+      explainText.textContent = 'Start typing a password to see a plain English breakdown of its strength.';
+      return;
+    }
+
+    const pct = Math.min(100, Math.round((result.bits / 100) * 100));
+    strengthFill.style.transform = 'scaleX(' + (pct / 100) + ')';
+    strengthFill.style.background = result.colorVar;
+    strengthLabel.textContent = result.label;
+    strengthLabel.style.color = result.colorVar;
+    strengthMeta.textContent = 'Estimated strength: about ' + Math.round(result.bits) + ' bits of entropy';
+
+    let explain = 'This password has roughly <strong>' + Math.round(result.bits) + ' bits</strong> of estimated entropy, ' +
+      'based on its length (' + pw.length + ' characters) and the variety of character types it uses. ';
+
+    if (result.penalties.length > 0) {
+      explain += 'It scores lower than the raw length suggests because ' + result.penalties.join(' and ') + '. ';
+    }
+
+    if (result.bits < 36) {
+      explain += 'A longer password with a mix of character types, and no dictionary words or predictable patterns, would be much harder to guess or crack.';
+    } else if (result.bits < 60) {
+      explain += 'This is reasonable for low stakes accounts, but a password manager generating a longer, random passphrase would be safer for anything important.';
+    } else {
+      explain += 'This is strong enough to resist both guessing and most practical brute force attacks.';
+    }
+
+    explainText.innerHTML = explain;
+  }
+
+  function toHex(buffer) {
+    return Array.from(new Uint8Array(buffer))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+      .toUpperCase();
+  }
+
+  async function sha1(text) {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(text);
+    const hashBuffer = await crypto.subtle.digest('SHA-1', data);
+    return toHex(hashBuffer);
+  }
+
+  async function checkBreach() {
+    const pw = pwInput.value;
+    if (!pw) return;
+
+    breachResult.className = 'breach-result pending';
+    breachResult.textContent = 'Checking against known breaches...';
+    breachBtn.disabled = true;
+
+    try {
+      const hash = await sha1(pw);
+      const prefix = hash.slice(0, 5);
+      const suffix = hash.slice(5);
+
+      const res = await fetch('https://api.pwnedpasswords.com/range/' + prefix);
+      if (!res.ok) throw new Error('lookup failed');
+      const body = await res.text();
+
+      const lines = body.split('\n');
+      let count = 0;
+      for (const line of lines) {
+        const [lineSuffix, lineCount] = line.trim().split(':');
+        if (lineSuffix === suffix) {
+          count = parseInt(lineCount, 10);
+          break;
+        }
+      }
+
+      if (count > 0) {
+        breachResult.className = 'breach-result unsafe';
+        breachResult.textContent = 'Found in ' + count.toLocaleString() + ' known breaches. Do not use this password anywhere.';
+      } else {
+        breachResult.className = 'breach-result safe';
+        breachResult.textContent = 'Not found in known breaches. This does not guarantee it is safe forever, but it has not shown up in any breach dataset checked here.';
+      }
+    } catch (err) {
+      breachResult.className = 'breach-result pending';
+      breachResult.textContent = 'Could not reach the breach check service. Try again in a moment.';
+    } finally {
+      breachBtn.disabled = false;
+    }
+  }
+
+  pwInput.addEventListener('input', function () {
+    renderStrength(pwInput.value);
+    breachBtn.disabled = pwInput.value.length === 0;
+    breachResult.className = 'breach-result pending';
+    breachResult.textContent = 'Not checked yet';
+  });
+
+  toggleVisibility.addEventListener('click', function () {
+    const isPassword = pwInput.type === 'password';
+    pwInput.type = isPassword ? 'text' : 'password';
+    toggleVisibility.textContent = isPassword ? 'hide' : 'show';
+  });
+
+  breachBtn.addEventListener('click', checkBreach);
+
+  renderStrength('');
+})();
+</script>
+
+</body>
+</html>
