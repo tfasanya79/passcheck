@@ -2,7 +2,7 @@
 
 A password strength and known-breach checker that runs entirely in your browser. Your password is never sent anywhere in full, and the strength analysis never leaves the page at all.
 
-**Live app:** https://aipal-staging.cloud/passcheck/
+**Live app:** https://timfas.com/passcheck/
 
 ## Features
 
